@@ -7,6 +7,7 @@ require("solidity-coverage");
 require("@nomiclabs/hardhat-solhint");
 require("hardhat-contract-sizer");
 require("solidity-docgen");
+require("hardhat-gas-reporter");
 require("dotenv").config();
 
 const { DEPLOYER_PRIVATE_KEY, TESTNET_RPC_URL } = process.env;
@@ -24,6 +25,14 @@ module.exports = {
         accounts: [`0x${DEPLOYER_PRIVATE_KEY}`],
       },
     },
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS !== undefined,
+    currency: 'USD',
+    noColors: process.env.GAS_REPORT_NO_COLOR === 'true',
+    // Uncomment the next line if you want to use CoinMarketCap API to fetch gas prices
+    // coinmarketcap: COINMARKETCAP_API_KEY,
+    token: "ETH",
   },
   solidity: {
     version: "0.8.19",
