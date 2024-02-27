@@ -167,7 +167,6 @@ contract MerkleClaims is AccessControl {
         if (!approvedAddress[msg.sender] && block.timestamp > holdPeriod + deployTimeStamp){
             uint startTime = deployTimeStamp + holdPeriod;
             uint tokensPerWithdraw = amountOfTotalTokens / totalMonths;
-           // uint month = 30 days;
             _setUpVesting(startTime, tokensPerWithdraw, amountOfTotalTokens, totalMonths);
 
         } else {
@@ -175,27 +174,27 @@ contract MerkleClaims is AccessControl {
         }
         }
 
-        function claimMultipleInterval(uint256 claimsPending) external {
+        function claimMultipleInterval(uint8 claimsPending) external {
         ReccuringVesting storage vesting = reccuringVestingSchedules[msg.sender];
-        if (vesting.numberOfWithdrawalsExecuted
-         == vesting.numberOfTotalWithdrawals
-         ) {
-             if(!remainderGiven[msg.sender]){
+        if (vesting.numberOfWithdrawalsExecuted == vesting.numberOfTotalWithdrawals) {
+             if(!remainderGiven[msg.sender]) {
                  uint remainder = vesting.totalTokens % vesting.numberOfTotalWithdrawals;
                  remainderGiven[msg.sender] = true;
                  SafeERC20.safeTransferFrom(IERC20(merkleToken), merkleFoundation, msg.sender, remainder);
              }
             revert TokensAlreadyClaimed();
         }
-        uint months = vesting.numberOfWithdrawalsExecuted;
-        uint month = 30 days;
-        uint monthsBeingClaimed = claimsPending * month;
-        if(block.timestamp <  vesting.startTimestamp + month * months + monthsBeingClaimed) {
+
+        uint month = 30 days; 
+        uint months = vesting.numberOfWithdrawalsExecuted * month; // 0
+        uint monthsBeingClaimed = claimsPending * month; // 1 month
+        if(block.timestamp < vesting.startTimestamp + months + monthsBeingClaimed) {
             revert TokensStillLocked();
         }
-        vesting.numberOfWithdrawalsExecuted = vesting.numberOfWithdrawalsExecuted + 1;
+         uint256 amount = vesting.amountPerWithdrawal * claimsPending;
 
-        uint256 amount = vesting.amountPerWithdrawal * claimsPending;
+        vesting.numberOfWithdrawalsExecuted += claimsPending;
+       
      
         SafeERC20.safeTransferFrom(IERC20(merkleToken), merkleFoundation, msg.sender, amount);
     }
@@ -257,8 +256,6 @@ contract MerkleClaims is AccessControl {
         ) internal
         { 
 
-        uint256 releaseTime = block.timestamp + 30 days;
-
         reccuringVestingSchedules[msg.sender] = (ReccuringVesting(
             startTimestamp,
             amountPerWithdrawal, 
@@ -267,6 +264,7 @@ contract MerkleClaims is AccessControl {
             0,
             numberOfWithdrawals
         ));
+        approvedAddress[msg.sender] = true;
         emit TokensSetToVest(
             msg.sender, 
             totalTokens

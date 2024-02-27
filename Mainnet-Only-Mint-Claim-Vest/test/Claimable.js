@@ -7,6 +7,7 @@ const { MerkleTree } = require("merkletreejs");
 const { expectRevert } = require('@openzeppelin/test-helpers');
 
 const DeployTime = time.latest();
+const month  = 30 * 24 * 60 * 60;
 const SIXmo_YEAR_IN_SECS = 365 * 24 * 60 * 30;
 const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
 const TWO_YEAR_IN_SECS = 365 * 24 * 60 * 120;
@@ -356,30 +357,49 @@ it("a user can only claim the tokens they own", async function () {
     });    
   });
   describe("access control", function () {
-    
+    let amountOfTokens;
+    let holdPeriod;
+    let deliveryPeriod;
+    let months;
+    let leaf;
+    let proof;
 
+    beforeEach(async function () {
+    amountOfTokens = 100; 
+    holdPeriod = 31536000;
+    deliveryPeriod = 63072000; 
+    months = 24;
+  
+   
+    leaf = hashVestingList(addr1.address, amountOfTokens, holdPeriod, deliveryPeriod, months);
+   // console.log(leaf);
+    proof =  merkleTreeVesting.getHexProof(leaf);
+    });
     it("It should set a struct once the six month hold is done", async function () {
-
-      // address: addr1.address.toString(), amountOfTokens: '100', holdPeriod: '31536000', deliveryPeriod: '63072000', months: '24'},
-
-      const amountOfTokens = 100; 
-      const holdPeriod = 31536000;
-      const  deliveryPeriod = 63072000; 
-      const months = 24;
-    
-      const leaf = hashVestingList(addr1.address, amountOfTokens, holdPeriod, deliveryPeriod, months);
-     // console.log(leaf);
-     const proof =  merkleTreeVesting.getHexProof(leaf);
 
       const unlockTime = ONE_YEAR_IN_SECS + 1;
       await time.increase(unlockTime);
 
 
-  await expect(merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof))
-      .to.emit(merkleClaims, "TokensSetToVest")
-      .withArgs(addr1.address, amountOfTokens.toString());
+      await expect(merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof))
+        .to.emit(merkleClaims, "TokensSetToVest")
+        .withArgs(addr1.address, amountOfTokens.toString());
 
-  //    
+    });
+    it("It allow the first claim to be made", async function () {
+
+      const unlockTime = ONE_YEAR_IN_SECS + 1;
+      await time.increase(unlockTime);
+
+
+      await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+      // HERE IS NEW
+      const claimTime = month + 5;
+      await time.increase(claimTime);
+
+      await merkleClaims.connect(addr1).claimMultipleInterval(1);
+      const  balance = await token.balanceOf(addr1.address);
+      await expect(balance).to.equal(4);
     });
   });
 
