@@ -79,12 +79,22 @@ contract MerkleClaims is AccessControl {
     error TokensStillLocked();
     error TokensAlreadyClaimed();
     error NotTimeYetOrDuplicateClaim();
+    error NotApprovedAddress();
 
 
     // Events
     event NFTHasClaimed(address indexed holder, uint256 indexed tokenId, uint256 indexed amount);
     event AddressClaimedEarnedTokens(address indexed earner, uint256 indexed amount);
     event TokensSetToVest(address indexed beneficiary, uint256 indexed totalTokensVesting);
+
+
+    modifier isApprovedAddress() {
+        if(!approvedAddress[msg.sender]){
+            revert NotApprovedAddress();
+        }
+        
+        _;
+    }
 
 
     constructor(
@@ -162,8 +172,10 @@ contract MerkleClaims is AccessControl {
         uint8 totalMonths, 
         bytes32[] calldata merkleProof
         ) external {
+
         bytes32 leaf = keccak256(abi.encode(msg.sender, amountOfTotalTokens, holdPeriod, deliveryPeriod, totalMonths));
         require(MerkleProof.verify(merkleProof, merkleRootForVesting, leaf), "Invalid Merkle proof for address");
+
         if (!approvedAddress[msg.sender] && block.timestamp > holdPeriod + deployTimeStamp){
             uint startTime = deployTimeStamp + holdPeriod;
             uint tokensPerWithdraw = amountOfTotalTokens / totalMonths;
@@ -174,21 +186,26 @@ contract MerkleClaims is AccessControl {
         }
         }
 
-        function claimVestedTokens(uint8 claimsPending) external {
-        ReccuringVesting storage vesting = reccuringVestingSchedules[msg.sender];
-        if (vesting.numberOfWithdrawalsExecuted == vesting.numberOfTotalWithdrawals) {
-             if(!remainderGiven[msg.sender]) {
-                 uint remainder = vesting.totalTokens % vesting.numberOfTotalWithdrawals;
-                 remainderGiven[msg.sender] = true;
-                 SafeERC20.safeTransferFrom(IERC20(merkleToken), merkleFoundation, msg.sender, remainder);
-             } else {
-            revert TokensAlreadyClaimed();
-             }
+        function claimVestedTokens(uint8 claimsPending) external isApprovedAddress(){
+
+            ReccuringVesting storage vesting = reccuringVestingSchedules[msg.sender];
+
+            if (vesting.numberOfWithdrawalsExecuted == vesting.numberOfTotalWithdrawals) {
+                if(!remainderGiven[msg.sender]) {
+                    uint remainder = vesting.totalTokens % vesting.numberOfTotalWithdrawals;
+                    remainderGiven[msg.sender] = true;
+                    SafeERC20.safeTransferFrom(IERC20(merkleToken), merkleFoundation, msg.sender, remainder);
+                } else {
+                revert TokensAlreadyClaimed();
+                }
         }
 
         uint month = 30 days; 
+
         uint months = vesting.numberOfWithdrawalsExecuted * month; // 0
+
         uint monthsBeingClaimed = claimsPending * month; // 1 month
+
         if(block.timestamp < vesting.startTimestamp + months + monthsBeingClaimed) {
             revert TokensStillLocked();
         }
@@ -236,6 +253,11 @@ contract MerkleClaims is AccessControl {
      */
     function setMerkleRootForEarnings(bytes32 _merkleRootForEarnings) external onlyRole(OPERATOR_ROLE){
         merkleRootForEarnings = _merkleRootForEarnings;
+    }
+
+    // Sets the Merkle root for vesting schedules
+    function setMerkleRootForVesting(bytes32 _merkleRootForVesting) external onlyRole(OPERATOR_ROLE){
+        merkleRootForVesting = _merkleRootForVesting;
     }
 
     function setNFTAddress(address _NFTContract) external onlyRole(OPERATOR_ROLE){
