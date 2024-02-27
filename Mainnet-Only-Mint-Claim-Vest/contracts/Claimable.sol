@@ -36,8 +36,11 @@ contract MerkleClaims is AccessControl {
     // Merkle Root for Earnings
     bytes32 public merkleRootForEarnings;
 
+    // Merkle Root For Vesting
+    bytes32 public merkleRootForVesting;
+
     // Storage for the Merkle Foundation
-    address public merkleFoundation;
+    address private merkleFoundation;
 
     // Storage for the Merkle Token
     address public merkleToken;
@@ -48,14 +51,18 @@ contract MerkleClaims is AccessControl {
     // Address is Presale Buyer
     mapping(address => bool) private approvedAddress;
 
+    // Address is Presale Buyer
+    mapping(address => bool) private remainderGiven;
+
     // beneficiary => reccuring vesting schedules
-    mapping(address => Reccuringvesting[]) public reccuringVestingSchedules;
+    mapping(address => ReccuringVesting) public reccuringVestingSchedules;
 
     // multiple vesting schedules per beneficiary
-    struct Reccuringvesting {
+    struct ReccuringVesting {
         uint256 startTimestamp;
         uint256 amountPerWithdrawal;
         uint256 withdrawalInterval;
+        uint256 totalTokens;
         uint8 numberOfWithdrawalsExecuted;
         uint8 numberOfTotalWithdrawals;  
     }
@@ -69,11 +76,15 @@ contract MerkleClaims is AccessControl {
     // Errors
     error CallerIsNotOwner();
     error RewardAlreadyClaimed();
+    error TokensStillLocked();
+    error TokensAlreadyClaimed();
 
 
     // Events
     event NFTHasClaimed(address indexed holder, uint256 indexed tokenId, uint256 indexed amount);
     event AddressClaimedEarnedTokens(address indexed earner, uint256 indexed amount);
+    event TokensSetToVest(address indexed beneficiary, uint256 indexed totalTokensVesting);
+
 
     constructor(
         
@@ -82,6 +93,7 @@ contract MerkleClaims is AccessControl {
         address MERKLEFOUNDATION,
         bytes32 _merkleRoot,
         bytes32 _merkleRootForEarnings,
+        bytes32 _merkleRootForVesting,
         address operator
     ) {
         deployTimeStamp = block.timestamp;
@@ -89,6 +101,7 @@ contract MerkleClaims is AccessControl {
         merkleFoundation = MERKLEFOUNDATION;
         merkleRoot = _merkleRoot;
         merkleRootForEarnings = _merkleRootForEarnings;
+        merkleRootForVesting = _merkleRootForVesting;
         NFTContract = _NFTContract;
         amountOfTokensPerNFT = 2250;
         _setupRole(DEFAULT_ADMIN_ROLE, MERKLEFOUNDATION);
@@ -154,30 +167,32 @@ contract MerkleClaims is AccessControl {
             uint startTime = deployTimeStamp + holdPeriod;
             uint tokensPerWithdraw = amountOfTotalTokens / totalMonths;
            // uint month = 30 days;
-            _setUpVesting(startTime, tokensPerWithdraw, 30 days, totalMonths, 0)
+            _setUpVesting(startTime, tokensPerWithdraw, amountOfTotalTokens, totalMonths);
 
         }
         }
 
         function claimMultipleInterval(uint256 claimsPending) external {
-        if (reccuringVestingSchedules[msg.sender].numberOfWithdrawalsExecuted
-         == reccuringVestingSchedules[msg.sender][vestingIndex].numberOfTotalWithdrawals
+        ReccuringVesting storage vesting = reccuringVestingSchedules[msg.sender];
+        if (vesting.numberOfWithdrawalsExecuted
+         == vesting.numberOfTotalWithdrawals
          ) {
+             if(!remainderGiven[msg.sender]){
+                 uint remainder = vesting.totalTokens % vesting.numberOfTotalWithdrawals;
+                 remainderGiven[msg.sender] = true;
+                 SafeERC20.safeTransferFrom(IERC20(merkleToken), merkleFoundation, msg.sender, remainder);
+             }
             revert TokensAlreadyClaimed();
         }
-
-        Reccuringvesting storage vesting = reccuringVestingSchedules[msg.sender];
-        uint months = reccuringVestingSchedules[msg.sender].numberOfWithdrawalsExecuted;
+        uint months = vesting.numberOfWithdrawalsExecuted;
         uint month = 30 days;
         uint monthsBeingClaimed = claimsPending * month;
-        if(block.timestamp <  startTime + month * months + monthsBeingClaimed) {
+        if(block.timestamp <  vesting.startTimestamp + month * months + monthsBeingClaimed) {
             revert TokensStillLocked();
         }
         vesting.numberOfWithdrawalsExecuted = vesting.numberOfWithdrawalsExecuted + 1;
 
         uint256 amount = vesting.amountPerWithdrawal * claimsPending;
-        uint amount = amountOfTotalTokens / totalMonths;
-        
      
         SafeERC20.safeTransferFrom(IERC20(merkleToken), merkleFoundation, msg.sender, amount);
     }
@@ -230,38 +245,29 @@ contract MerkleClaims is AccessControl {
 
     }
 
-     uint amountOfTotalTokens, 
-        uint holdPeriod, 
-        uint deliveryPeriod, 
-        uint8 totalMonths, 
+
     function _setUpVesting(       
-        uint256 startTimestamp;
-      uint256 amountPerWithdrawal;
-      uint256 withdrawalInterval;
-        uint8 numberOfWithdrawals;
-        uint8 numberOfWithdrawalsExecuted; 
-        uint256 releaseTime;
-        uint256 nextreleaseTime;
-        )
-        internal returns(bool sucesseful)
+        uint256 startTimestamp,
+      uint256 amountPerWithdrawal,
+        uint256 totalTokens,
+        uint8 numberOfWithdrawals
+        ) internal
         { 
 
-        uint256 releaseTime = block.timestamp + withdrawalInterval;
+        uint256 releaseTime = block.timestamp + 30 days;
 
-        reccuringVestingSchedules[msg.sender].push(Reccuringvesting(
-            amountperWithdrawal, 
-            withdrawalInterval, 
-            numberOfWithdrawals, 
-            0, 
-            releaseTime
-            ));
-        emit AdminSetTokensToVest(
-            beneficiary, 
-            amountperWithdrawal * numberOfWithdrawals, 
-            withdrawalInterval * numberOfWithdrawals
+        reccuringVestingSchedules[msg.sender] = (ReccuringVesting(
+            startTimestamp,
+            amountPerWithdrawal, 
+            30 days, 
+            totalTokens,
+            0,
+            numberOfWithdrawals
+        ));
+        emit TokensSetToVest(
+            msg.sender, 
+            totalTokens
             );
         
-        vestedKarrots += (amountperWithdrawal * numberOfWithdrawals);
-
     }
 }

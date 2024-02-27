@@ -15,6 +15,17 @@ function hashAddressAmountPair(address, amount) {
   return keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [address, amount]));
 }
 
+function hashVestingList(address, amountOfTokens, holdPeriod, deliveryPeriod, months) {
+  return keccak256(ethers.utils.defaultAbiCoder.encode([
+    'address', 
+    'uint256', 
+    'uint256', 
+    'uint256', 
+    'uint8',
+    ], [address, amountOfTokens, holdPeriod, deliveryPeriod, months]));
+}
+
+
 describe("MerkleClaims Contract", function () {
   let MerkleClaims;
   let owner;
@@ -27,6 +38,7 @@ describe("MerkleClaims Contract", function () {
   let rootTokenIdAmount;
   let rootAddressAmount;
   let token;
+  let merkleTreeVesting;
 
 
   // This is a global setup function that runs before all tests
@@ -47,7 +59,7 @@ describe("MerkleClaims Contract", function () {
       { tokenId: '2', amount: '200' },
     ];
 
-    const vestingPairs = [  
+    const vestingList = [  
       // six months in seconds // 24 months delivery 
       { address: owner.address.toString(), amountOfTokens: '50', holdPeriod: '15678900', deliveryPeriod: '63072000', months: '24'},
       // 12 months in seconds // 24 months delivery
@@ -65,14 +77,29 @@ describe("MerkleClaims Contract", function () {
       return keccak256(ethers.utils.defaultAbiCoder.encode(['address', 'uint256'], [address, amount]));
     }
 
+    function hashVestingList(address, amountOfTokens, holdPeriod, deliveryPeriod, months) {
+      return keccak256(ethers.utils.defaultAbiCoder.encode([
+        'address', 
+        'uint256', 
+        'uint256', 
+        'uint256', 
+        'uint8',
+        ], [address, amountOfTokens, holdPeriod, deliveryPeriod, months]));
+    }
+
     const leafNodesTokenIdAmount = tokenIdAmountPairs.map(pair => hashTokenIdAmountPair(pair.tokenId, pair.amount));
     merkleTreeTokenIdAmount = new MerkleTree(leafNodesTokenIdAmount, keccak256, { sortPairs: true });
 
     const leafNodesAddressAmount = addressAmountPairs.map(pair => hashAddressAmountPair(pair.address, pair.amount));
     merkleTreeAddressAmount = new MerkleTree(leafNodesAddressAmount, keccak256, { sortPairs: true });
 
+    // for Vesting
+    const leafNodesVesting = vestingList.map(pair => hashVestingList(pair.address, pair.amountOfTokens, pair.holdPeriod, pair.deliveryPeriod, pair.months));
+    merkleTreeVesting = new MerkleTree(leafNodesVesting, keccak256, { sortPairs: true });
+
     rootTokenIdAmount = "0x" + merkleTreeTokenIdAmount.getRoot().toString('hex');
     rootAddressAmount = "0x" + merkleTreeAddressAmount.getRoot().toString('hex');
+    rootVesting = "0x" + merkleTreeVesting.getRoot().toString('hex');
 
 
 
@@ -89,6 +116,7 @@ describe("MerkleClaims Contract", function () {
       owner.address, 
       rootTokenIdAmount, 
       rootAddressAmount,
+      rootVesting,
       owner.address,
       );
 
@@ -321,6 +349,38 @@ it("a user can only claim the tokens they own", async function () {
  
     });    
   });
+  describe("access control", function () {
+    // 
+    DeployTime = time.latest();
+    SIXmo_YEAR_IN_SECS = 365 * 24 * 60 * 30;
+    ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
+    TWO_YEAR_IN_SECS = 365 * 24 * 60 * 120;
+    THREE_YEAR_IN_SECS = 365 * 24 * 60 * 120;
+
+    it("It should set a struct once the six month hold is done", async function () {
+
+      // address: addr1.address.toString(), amountOfTokens: '100', holdPeriod: '31536000', deliveryPeriod: '63072000', months: '24'},
+
+      const amountOfTokens = 100; 
+      const holdPeriod = 31536000;
+      const  deliveryPeriod = 63072000; 
+      const months = 24;
+    
+      const leaf = hashVestingList(addr1.address, amountOfTokens, holdPeriod, deliveryPeriod, months);
+     // console.log(leaf);
+     const proof =  merkleTreeVesting.getHexProof(leaf);
+
+    //   const unlockTime = DeployTime + TWO_YEAR_IN_SECS;
+
+    //   await time.increase(unlockTime);
+  //  const proof = "0x";
+
+      await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+
+  //    
+    });
+  });
+
 });
 
 
