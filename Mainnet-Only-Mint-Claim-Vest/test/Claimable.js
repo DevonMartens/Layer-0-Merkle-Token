@@ -6,6 +6,12 @@ const { MerkleTree } = require("merkletreejs");
 
 const { expectRevert } = require('@openzeppelin/test-helpers');
 
+const DeployTime = time.latest();
+const SIXmo_YEAR_IN_SECS = 365 * 24 * 60 * 30;
+const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
+const TWO_YEAR_IN_SECS = 365 * 24 * 60 * 120;
+const THREE_YEAR_IN_SECS = 365 * 24 * 60 * 120;
+
 
 function hashTokenIdAmountPair(tokenId, amount) {
   return keccak256(ethers.utils.defaultAbiCoder.encode(['uint256', 'uint256'], [tokenId, amount]));
@@ -61,11 +67,11 @@ describe("MerkleClaims Contract", function () {
 
     const vestingList = [  
       // six months in seconds // 24 months delivery 
-      { address: owner.address.toString(), amountOfTokens: '50', holdPeriod: '15678900', deliveryPeriod: '63072000', months: '24'},
+      { address: owner.address.toString(), amountOfTokens: '50', holdPeriod: SIXmo_YEAR_IN_SECS.toString(), deliveryPeriod: '63072000', months: '24'},
       // 12 months in seconds // 24 months delivery
-      { address: addr1.address.toString(), amountOfTokens: '100', holdPeriod: '31536000', deliveryPeriod: '63072000', months: '24'},
+      { address: addr1.address.toString(), amountOfTokens: '100', holdPeriod: ONE_YEAR_IN_SECS.toString(), deliveryPeriod: '63072000', months: '24'},
       // 12 months in seconds // 36 months delivery
-      { address: addr2.address.toString(), amountOfTokens: '200', holdPeriod: '31536000', deliveryPeriod: '94608000', months: '36'},
+      { address: addr2.address.toString(), amountOfTokens: '200', holdPeriod: ONE_YEAR_IN_SECS.toString(), deliveryPeriod: '94608000', months: '36'},
     ];
 
 
@@ -350,12 +356,7 @@ it("a user can only claim the tokens they own", async function () {
     });    
   });
   describe("access control", function () {
-    // 
-    DeployTime = time.latest();
-    SIXmo_YEAR_IN_SECS = 365 * 24 * 60 * 30;
-    ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-    TWO_YEAR_IN_SECS = 365 * 24 * 60 * 120;
-    THREE_YEAR_IN_SECS = 365 * 24 * 60 * 120;
+    
 
     it("It should set a struct once the six month hold is done", async function () {
 
@@ -370,12 +371,13 @@ it("a user can only claim the tokens they own", async function () {
      // console.log(leaf);
      const proof =  merkleTreeVesting.getHexProof(leaf);
 
-    //   const unlockTime = DeployTime + TWO_YEAR_IN_SECS;
+      const unlockTime = ONE_YEAR_IN_SECS + 1;
+      await time.increase(unlockTime);
 
-    //   await time.increase(unlockTime);
-  //  const proof = "0x";
 
-      await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+  await expect(merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof))
+      .to.emit(merkleClaims, "TokensSetToVest")
+      .withArgs(addr1.address, amountOfTokens.toString());
 
   //    
     });

@@ -78,6 +78,7 @@ contract MerkleClaims is AccessControl {
     error RewardAlreadyClaimed();
     error TokensStillLocked();
     error TokensAlreadyClaimed();
+    error NotTimeYet();
 
 
     // Events
@@ -163,12 +164,14 @@ contract MerkleClaims is AccessControl {
         ) external {
         bytes32 leaf = keccak256(abi.encode(msg.sender, amountOfTotalTokens, holdPeriod, deliveryPeriod, totalMonths));
         require(MerkleProof.verify(merkleProof, merkleRootForVesting, leaf), "Invalid Merkle proof for address");
-        if (!approvedAddress[msg.sender] && block.timestamp > 30 days + holdPeriod + deployTimeStamp){
+        if (!approvedAddress[msg.sender] && block.timestamp > holdPeriod + deployTimeStamp){
             uint startTime = deployTimeStamp + holdPeriod;
             uint tokensPerWithdraw = amountOfTotalTokens / totalMonths;
            // uint month = 30 days;
             _setUpVesting(startTime, tokensPerWithdraw, amountOfTotalTokens, totalMonths);
 
+        } else {
+            revert NotTimeYet();
         }
         }
 
