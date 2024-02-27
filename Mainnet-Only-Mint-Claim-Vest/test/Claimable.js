@@ -331,6 +331,23 @@ it("a user can only claim the tokens they own", async function () {
       await expectRevert(token.connect(addr1).Mint(addr1.address, 10), `AccessControl: account ${addr1Lower} is missing role ${DEFAULT_ADMIN_ROLE}`);
 
     });
+    it("setMerkleFoundation can not be called by non-admin", async function () {
+      await expectRevert(merkleClaims.connect(addr1).setMerkleFoundation(addr1.address), `AccessControl: account ${addr1Lower} is missing role ${DEFAULT_ADMIN_ROLE}`);
+
+    });
+    it("setMerkleFoundation can  be called by admin", async function () {
+      await merkleClaims.setMerkleFoundation(addr1.address);
+
+    });
+    it("setMerkleToken can not be called by non-admin", async function () {
+      await expectRevert(merkleClaims.connect(addr1).setMerkleToken(addr1.address), `AccessControl: account ${addr1Lower} is missing role ${DEFAULT_ADMIN_ROLE}`);
+
+    });
+    it("setMerkleToken can  be called by admin", async function () {
+      await merkleClaims.setMerkleToken(addr1.address);
+
+    });
+    //
      
       it("burn function should only be called by burner role", async function () {
         await token.Mint (addr1.address, 10);
@@ -397,11 +414,93 @@ it("a user can only claim the tokens they own", async function () {
       const claimTime = month + 5;
       await time.increase(claimTime);
 
-      await merkleClaims.connect(addr1).claimMultipleInterval(1);
+      await merkleClaims.connect(addr1).claimVestedTokens(1);
       const  balance = await token.balanceOf(addr1.address);
       await expect(balance).to.equal(4);
     });
-  });
+    it("remainder should be given", async function () {
+
+      const unlockTime = ONE_YEAR_IN_SECS + 1;
+      await time.increase(unlockTime);
+
+
+      await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+      // HERE IS NEW
+      const claimTime = TWO_YEAR_IN_SECS + 5;
+      await time.increase(claimTime);
+    });
+      it("It allow the remainder to be made", async function () {
+
+        const unlockTime = ONE_YEAR_IN_SECS + 1;
+        await time.increase(unlockTime);
+  
+  
+        await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+        // HERE IS NEW
+        const claimTime = TWO_YEAR_IN_SECS + 5;
+        await time.increase(claimTime);
+  
+        await merkleClaims.connect(addr1).claimVestedTokens(24);
+        const init = await token.balanceOf(addr1.address);
+        console.log(init)
+        await merkleClaims.connect(addr1).claimVestedTokens(0);
+        const final = await token.balanceOf(addr1.address);
+        await expect(final).to.equal(100);
+        await expect(init).not.to.equal(final);
+    
+      });
+      it("if all tokens are claimed claiming should no longer work", async function () {
+
+        const unlockTime = ONE_YEAR_IN_SECS + 1;
+        await time.increase(unlockTime);
+  
+  
+        await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+        // // HERE IS NEW
+        const claimTime = TWO_YEAR_IN_SECS + 5;
+        await time.increase(claimTime);
+  
+        await merkleClaims.connect(addr1).claimVestedTokens(24);
+        
+        await merkleClaims.connect(addr1).claimVestedTokens(0);
+
+        await expectRevert(merkleClaims.connect(addr1).claimVestedTokens(0), 'TokensAlreadyClaimed()');
+    
+      });
+      it("Claim vesting schdule will not work if the inputs are wrong", async function () {
+ 
+        await expectRevert(merkleClaims.claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof), 'Invalid Merkle proof for address');
+     
+      });
+      it("Claim vesting schedule will revert if claim is duplicate", async function () {
+        const unlockTime = ONE_YEAR_IN_SECS + 1;
+        await time.increase(unlockTime);
+
+
+        await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+ 
+        await expectRevert(merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof), 'NotTimeYetOrDuplicateClaim()');
+     
+      });
+      it("Claim vesting will revert if time has NOT passed", async function () {
+        
+ 
+        await expectRevert(merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof), 'NotTimeYetOrDuplicateClaim()');
+     
+      });
+      it("Claim tokens will revert if time has NOT passed", async function () {
+        const unlockTime = ONE_YEAR_IN_SECS + 1;
+        await time.increase(unlockTime);
+
+
+        await merkleClaims.connect(addr1).claimVestingSchedule(amountOfTokens, holdPeriod, deliveryPeriod, months, proof);
+        
+ 
+        await expectRevert(merkleClaims.connect(addr1).claimVestedTokens(1), 'TokensStillLocked()');
+     
+      });
+    });
+
 
 });
 

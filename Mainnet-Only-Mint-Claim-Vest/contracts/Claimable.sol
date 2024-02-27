@@ -78,7 +78,7 @@ contract MerkleClaims is AccessControl {
     error RewardAlreadyClaimed();
     error TokensStillLocked();
     error TokensAlreadyClaimed();
-    error NotTimeYet();
+    error NotTimeYetOrDuplicateClaim();
 
 
     // Events
@@ -170,19 +170,20 @@ contract MerkleClaims is AccessControl {
             _setUpVesting(startTime, tokensPerWithdraw, amountOfTotalTokens, totalMonths);
 
         } else {
-            revert NotTimeYet();
+            revert NotTimeYetOrDuplicateClaim();
         }
         }
 
-        function claimMultipleInterval(uint8 claimsPending) external {
+        function claimVestedTokens(uint8 claimsPending) external {
         ReccuringVesting storage vesting = reccuringVestingSchedules[msg.sender];
         if (vesting.numberOfWithdrawalsExecuted == vesting.numberOfTotalWithdrawals) {
              if(!remainderGiven[msg.sender]) {
                  uint remainder = vesting.totalTokens % vesting.numberOfTotalWithdrawals;
                  remainderGiven[msg.sender] = true;
                  SafeERC20.safeTransferFrom(IERC20(merkleToken), merkleFoundation, msg.sender, remainder);
-             }
+             } else {
             revert TokensAlreadyClaimed();
+             }
         }
 
         uint month = 30 days; 
