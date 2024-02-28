@@ -72,6 +72,7 @@ contract MerkleClaims is AccessControl {
     mapping(uint256 => bool) public hasTheNFTClaimedTheMerkleToken;
     mapping(address => bool) public hasClaimedEarnedTokens;
     mapping(address => uint) public totalClaimsForAddress;
+    mapping(address => bool) public vestingClaimed;
 
     // Errors
     error CallerIsNotOwner();
@@ -95,6 +96,14 @@ contract MerkleClaims is AccessControl {
         
         _;
     }
+
+     modifier claimHasBeenSet() {
+        if(vestingClaimed[msg.sender]){
+            revert NotTimeYetOrDuplicateClaim();
+        }  
+        _;
+    }
+        
 
 
     constructor(
@@ -180,7 +189,7 @@ contract MerkleClaims is AccessControl {
         uint deliveryPeriod, 
         uint8 totalMonths, 
         bytes32[] calldata merkleProof
-        ) external {
+        ) external claimHasBeenSet(){
 
         bytes32 leaf = keccak256(abi.encode(msg.sender, amountOfTotalTokens, holdPeriod, deliveryPeriod, totalMonths));
         require(MerkleProof.verify(merkleProof, merkleRootForVesting, leaf), "Invalid Merkle proof for address");
@@ -188,6 +197,7 @@ contract MerkleClaims is AccessControl {
         if (!approvedAddress[msg.sender] && block.timestamp > holdPeriod + deployTimeStamp){
             uint startTime = deployTimeStamp + holdPeriod;
             uint tokensPerWithdraw = amountOfTotalTokens / totalMonths;
+            vestingClaimed[msg.sender] = true;
             _setUpVesting(startTime, tokensPerWithdraw, amountOfTotalTokens, totalMonths);
 
         } else {
@@ -299,11 +309,14 @@ contract MerkleClaims is AccessControl {
 
     }
 
-    /**
-     * @notice Sets the approved address for claiming tokens.
-     * @dev Only callable by accounts with the OPERATOR_ROLE.
-     * @param _address The new approved address.
-     */
+     /**
+    * @notice Sets the approved address for claiming tokens.
+    * @dev Only callable internally after caller if verified above.
+    * @param startTimestamp The start time for the vesting schedule to be claimed
+    * @param amountPerWithdrawal The amount of tokens to be claimed per withdrawal.
+    * @param totalTokens The total amount of tokens to be claimed.
+    * @param numberOfWithdrawals The number of withdrawals to be made.
+    */
     function _setUpVesting(       
         uint256 startTimestamp,
       uint256 amountPerWithdrawal,
