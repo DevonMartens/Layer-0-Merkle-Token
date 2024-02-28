@@ -165,6 +165,15 @@ contract MerkleClaims is AccessControl {
         emit AddressClaimedEarnedTokens(msg.sender, amount);
     }
 
+    /**
+     * @notice Claims tokens based on a vesting schedule with a Merkle proof verification.
+     * @dev Verifies the claim hasn't been made yet and the proof is valid before minting tokens to the caller.
+     * @param amountOfTotalTokens The total amount of tokens to claim.
+     * @param holdPeriod The time to hold the tokens before claiming.
+     * @param deliveryPeriod The time to deliver the tokens after the hold period.
+     * @param totalMonths The total number of months for the vesting schedule.
+     * @param merkleProof A Merkle proof that validates the claim.
+     */
     function claimVestingSchedule(
         uint amountOfTotalTokens, 
         uint holdPeriod, 
@@ -185,6 +194,12 @@ contract MerkleClaims is AccessControl {
             revert NotTimeYetOrDuplicateClaim();
         }
         }
+
+        /** 
+        * @notice Claims vested tokens based on a vesting schedule.
+        * @dev Verifies the claim hasn't been made yet and the proof is valid before minting tokens to the caller.
+        * @param claimsPending The number of claims to make.
+        */
 
         function claimVestedTokens(uint8 claimsPending) external isApprovedAddress(){
 
@@ -255,22 +270,40 @@ contract MerkleClaims is AccessControl {
         merkleRootForEarnings = _merkleRootForEarnings;
     }
 
-    // Sets the Merkle root for vesting schedules
+    /**
+     * @notice Sets the Merkle root for vesting-based token claims.
+     * @dev Assumes the same role-based access control for consistency.
+     * @param _merkleRootForVesting The new Merkle root for vesting-based claims.
+     */
     function setMerkleRootForVesting(bytes32 _merkleRootForVesting) external onlyRole(OPERATOR_ROLE){
         merkleRootForVesting = _merkleRootForVesting;
     }
 
+    /**
+     * @notice Sets the NFT contract address.
+     * @dev Only callable by accounts with the OPERATOR_ROLE.
+     * @param _NFTContract The new NFT contract address.
+     */
     function setNFTAddress(address _NFTContract) external onlyRole(OPERATOR_ROLE){
         NFTContract = _NFTContract;
 
     }
 
+    /**
+     * @notice Sets the amount of tokens per NFT.
+     * @dev Only callable by accounts with the OPERATOR_ROLE.
+     * @param _amountOfTokensPerNFT The new amount of tokens per NFT.
+     */
     function setTokensPerNFT(uint _amountOfTokensPerNFT) external onlyRole(OPERATOR_ROLE){
         amountOfTokensPerNFT = _amountOfTokensPerNFT;
 
     }
 
-
+    /**
+     * @notice Sets the approved address for claiming tokens.
+     * @dev Only callable by accounts with the OPERATOR_ROLE.
+     * @param _address The new approved address.
+     */
     function _setUpVesting(       
         uint256 startTimestamp,
       uint256 amountPerWithdrawal,

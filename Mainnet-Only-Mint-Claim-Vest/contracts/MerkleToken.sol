@@ -39,7 +39,12 @@ contract MerkleToken is ERC20, AccessControl {
         _burn(account, amount);
     }
 
-
+    /*
+    * @notice Mints a specified amount of tokens to an account.
+    * @dev Only callable by accounts with the DEFAULT_ADMIN_ROLE.
+    * @param account The account to which tokens will be minted.
+    * @param amount The amount of tokens to mint.
+    */
     function Mint(address account, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE){
         _mint(account, amount);
     }
